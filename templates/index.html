@@ -1,0 +1,921 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Data Analysis Dashboard - 2025 Season</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .plot-container {
+            min-height: 400px;
+            position: relative;
+            background: #1a202c;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #4a5568;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #2d3748;
+            color: #e2e8f0;
+        }
+
+        .loading {
+            text-align: center;
+            color: #a0aec0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .plot-error {
+            display: none;
+            text-align: center;
+            color: #f87171;
+            padding: 12px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .spinner {
+            border: 4px solid #edf2f7;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .plotly-graph-div {
+            background: #1a202c !important;
+            border-radius: 8px;
+        }
+
+        .form-label {
+            color: #e2e8f0;
+            font-weight: 500;
+        }
+
+        .form-select {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+        }
+
+        .form-button {
+            background-color: #3b82f6;
+            transition: background-color 0.2s;
+        }
+
+        .form-button:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-8">
+        <h1 class="text-4xl font-bold mb-8 text-center">Formula 1 Data Analysis Dashboard - {{ grand_prix }} 2025
+            Qualifying</h1>
+
+        {% if warning %}
+        <div class="bg-yellow-600 text-black p-4 rounded-lg mb-6 shadow">
+            {{ warning }}
+        </div>
+        {% endif %}
+
+        <form id="dashboard-form" method="POST" class="mb-10">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div>
+                    <label for="grand_prix" class="block text-sm form-label">Grand Prix:</label>
+                    <select name="grand_prix" id="grand_prix" class="mt-1 p-2 form-select rounded w-full">
+                        {% for gp in grand_prix_list %}
+                        <option value="{{ gp }}" {% if gp==grand_prix %}selected{% endif %}>{{ gp }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="driver1" class="block text-sm form-label">Driver 1 (Speed):</label>
+                    <select name="driver1" id="driver1" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==driver1 %}selected{% endif %}>{{ driver }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="driver2" class="block text-sm form-label">Driver 2 (Speed):</label>
+                    <select name="driver2" id="driver2" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==driver2 %}selected{% endif %}>{{ driver }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="tire_driver" class="block text-sm form-label">Tire Strategy Driver:</label>
+                    <select name="tire_driver" id="tire_driver" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==tire_driver %}selected{% endif %}>{{ driver }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="heatmap_driver" class="block text-sm form-label">Heatmap Driver:</label>
+                    <select name="heatmap_driver" id="heatmap_driver" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==heatmap_driver %}selected{% endif %}>{{ driver }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="gear_driver" class="block text-sm form-label">Gear Shift Driver:</label>
+                    <select name="gear_driver" id="gear_driver" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==gear_driver %}selected{% endif %}>{{ driver }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="mt-4 p-2 form-button rounded w-full md:w-auto font-semibold">Update
+                Dashboard</button>
+        </form>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="plot-container">
+                <h2 class="text-xl font-semibold mb-3">Speed & Throttle Comparison</h2>
+                <div id="speed-plot"></div>
+                <div id="speed-plot-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading speed plot...</p>
+                </div>
+                <p id="speed-plot-error" class="plot-error"></p>
+            </div>
+            <div class="plot-container">
+                <h2 class="text-xl font-semibold mb-3">Sector Times (Top 5 Drivers)</h2>
+                <div id="sector-plot"></div>
+                <div id="sector-plot-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading sector plot...</p>
+                </div>
+                <p id="sector-plot-error" class="plot-error"></p>
+            </div>
+            <div class="plot-container">
+                <h2 class="text-xl font-semibold mb-3">Tire Strategy</h2>
+                <div id="tire-plot"></div>
+                <div id="tire-plot-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading tire plot...</p>
+                </div>
+                <p id="tire-plot-error" class="plot-error"></p>
+            </div>
+            <div class="plot-container">
+                <h2 class="text-xl font-semibold mb-3">Lap Time Distribution</h2>
+                <div id="lap-time-plot"></div>
+                <div id="lap-time-plot-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading lap time plot...</p>
+                </div>
+                <p id="lap-time-plot-error" class="plot-error"></p>
+            </div>
+            <div class="plot-container">
+                <h2 class="text-xl font-semibold mb-3">Gear Shift Analysis</h2>
+                <div id="gear-plot"></div>
+                <div id="gear-plot-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading gear plot...</p>
+                </div>
+                <p id="gear-plot-error" class="plot-error"></p>
+            </div>
+            <div class="plot-container">
+                <h2 class="text-xl font-semibold mb-3">Speed Heatmap</h2>
+                <div id="heatmap-plot"></div>
+                <div id="heatmap-plot-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading heatmap plot...</p>
+                </div>
+                <p id="heatmap-plot-error" class="plot-error"></p>
+            </div>
+            <div class="plot-container">
+                <h2 class="text-xl font-semibold mb-3">Track Dominance Map</h2>
+                <div id="dominance-plot"></div>
+                <div id="dominance-plot-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading dominance plot...</p>
+                </div>
+                <p id="dominance-plot-error" class="plot-error"></p>
+            </div>
+            <div>
+                <h2 class="text-xl font-semibold mb-3">Driver Statistics</h2>
+                <table class="bg-gray-800 rounded-lg shadow">
+                    <thead>
+                        <tr class="bg-gray-700">
+                            <th class="p-2">Number</th>
+                            <th class="p-2">Driver</th>
+                            <th class="p-2">Team</th>
+                            <th class="p-2">Position</th>
+                            <th class="p-2">Points</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in driver_stats %}
+                        <tr>
+                            <td class="p-2">{{ stat.DriverNumber }}</td>
+                            <td class="p-2">{{ stat.Abbreviation }}</td>
+                            <td class="p-2">{{ stat.TeamName }}</td>
+                            <td class="p-2">{{ stat.Position }}</td>
+                            <td class="p-2">{{ stat.Points }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <h2 class="text-xl font-semibold mb-3">Sector Time Statistics</h2>
+                <table class="bg-gray-800 rounded-lg shadow">
+                    <thead>
+                        <tr class="bg-gray-700">
+                            <th class="p-2">Driver</th>
+                            <th class="p-2">S1 Mean (s)</th>
+                            <th class="p-2">S1 Std (s)</th>
+                            <th class="p-2">S2 Mean (s)</th>
+                            <th class="p-2">S2 Std (s)</th>
+                            <th class="p-2">S3 Mean (s)</th>
+                            <th class="p-2">S3 Std (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in sector_stats %}
+                        <tr>
+                            <td class="p-2">{{ stat.Driver }}</td>
+                            <td class="p-2">{{ "%.3f" % stat.Sector1_Mean }}</td>
+                            <td class="p-2">{{ "%.3f" % stat.Sector1_Std if stat.Sector1_Std else '-' }}</td>
+                            <td class="p-2">{{ "%.3f" % stat.Sector2_Mean }}</td>
+                            <td class="p-2">{{ "%.3f" % stat.Sector2_Std if stat.Sector2_Std else '-' }}</td>
+                            <td class="p-2">{{ "%.3f" % stat.Sector3_Mean }}</td>
+                            <td class="p-2">{{ "%.3f" % stat.Sector3_Std if stat.Sector3_Std else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Default empty plot for fallback
+        const emptyPlot = {
+            data: [],
+            layout: {
+                title: { text: "No Data Available", font: { size: 16, color: "#e2e8f0" } },
+                xaxis: { title: "No Data" },
+                yaxis: { title: "No Data" },
+                template: "plotly_dark",
+                annotations: [{ text: "No data available for this visualization", xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false, font: { size: 14, color: "#e2e8f0" } }],
+                margin: { t: 80, b: 60, l: 60, r: 60 }
+            }
+        };
+
+        async function fetchPlotData(plotType, params) {
+            try {
+                const response = await fetch(`/api/plot/${plotType}?${new URLSearchParams(params)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                const result = await response.json();
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                return JSON.parse(result.data);
+            } catch (e) {
+                console.error(`Error fetching ${plotType} plot:`, e);
+                return emptyPlot;
+            }
+        }
+
+        function renderF1Plot(plotId, loadingId, errorId, plotType, params) {
+            const plotDiv = document.getElementById(plotId);
+            const loadingDiv = document.getElementById(loadingId);
+            const errorDiv = document.getElementById(errorId);
+
+            loadingDiv.style.display = 'flex';
+            errorDiv.style.display = 'none';
+            plotDiv.style.display = 'none';
+
+            fetchPlotData(plotType, params).then(plot => {
+                try {
+                    if (!plot.data || plot.data.length === 0) {
+                        throw new Error('Empty or invalid plot data');
+                    }
+                    Plotly.newPlot(plotId, plot.data, plot.layout, { responsive: true, displayModeBar: true });
+                    loadingDiv.style.display = 'none';
+                    plotDiv.style.display = 'block';
+                } catch (e) {
+                    console.error(`Error rendering ${plotId}:`, e);
+                    loadingDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = `Failed to load ${plotType.replace('_', ' ')}: ${e.message}`;
+                    Plotly.newPlot(plotId, emptyPlot.data, emptyPlot.layout, { responsive: true });
+                }
+            });
+        }
+
+        function updatePlots() {
+            const form = document.getElementById('dashboard-form');
+            const formData = new FormData(form);
+            const params = {
+                grand_prix: formData.get('grand_prix'),
+                driver1: formData.get('driver1'),
+                driver2: formData.get('driver2'),
+                tire_driver: formData.get('tire_driver'),
+                heatmap_driver: formData.get('heatmap_driver'),
+                gear_driver: formData.get('gear_driver')
+            };
+
+            renderF1Plot('speed-plot', 'speed-plot-loading', 'speed-plot-error', 'speed', params);
+            renderF1Plot('sector-plot', 'sector-plot-loading', 'sector-plot-error', 'sector', params);
+            renderF1Plot('tire-plot', 'tire-plot-loading', 'tire-plot-error', 'tire', params);
+            renderF1Plot('lap-time-plot', 'lap-time-plot-loading', 'lap-time-plot-error', 'lap_time', params);
+            renderF1Plot('gear-plot', 'gear-plot-loading', 'gear-plot-error', 'gear', params);
+            renderF1Plot('heatmap-plot', 'heatmap-plot-loading', 'heatmap-plot-error', 'heatmap', params);
+            renderF1Plot('dominance-plot', 'dominance-plot-loading', 'dominance-plot-error', 'dominance', params);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePlots();
+            document.getElementById('dashboard-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                updatePlots();
+            });
+        });
+    </script>
+</body>
+
+</html> -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Data Analysis Dashboard - {{ year }} {{ grand_prix }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .plot-container {
+            min-height: 400px;
+            position: relative;
+            background: #1a202c;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #4a5568;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #2d3748;
+            color: #e2e8f0;
+        }
+
+        .loading {
+            text-align: center;
+            color: #a0aec0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .plot-error {
+            display: none;
+            text-align: center;
+            color: #f87171;
+            padding: 12px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .spinner {
+            border: 4px solid #edf2f7;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .plotly-graph-div {
+            background: #1a202c !important;
+            border-radius: 8px;
+        }
+
+        .form-label {
+            color: #e2e8f0;
+            font-weight: 500;
+        }
+
+        .form-select,
+        .form-checkbox {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+        }
+
+        .form-button {
+            background-color: #3b82f6;
+            transition: background-color 0.2s;
+        }
+
+        .form-button:hover {
+            background-color: #2563eb;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 50;
+        }
+
+        .modal-content {
+            background: #2d3748;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            margin: 15% auto;
+        }
+
+        .collapsible-header {
+            cursor: pointer;
+            background: #2d3748;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .collapsible-content {
+            display: none;
+        }
+
+        .collapsible-content.active {
+            display: block;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background: #4a5568;
+            color: #e2e8f0;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white">
+    <nav class="bg-gray-800 p-4 shadow">
+        <div class="container mx-auto flex justify-between">
+            <a href="/" class="text-xl font-bold">F1 Dashboard</a>
+            <div>
+                <a href="/" class="text-gray-300 hover:text-white px-3">Main Dashboard</a>
+                <a href="/stats" class="text-gray-300 hover:text-white px-3">Detailed Stats</a>
+                <a href="/telemetry" class="text-gray-300 hover:text-white px-3">Telemetry Analysis</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container mx-auto p-8">
+        <h1 class="text-4xl font-bold mb-8 text-center">Formula 1 Data Analysis Dashboard - {{ year }} {{ grand_prix }}
+            Qualifying</h1>
+
+        {% if warning %}
+        <div class="bg-yellow-600 text-black p-4 rounded-lg mb-6 shadow">
+            {{ warning }}
+        </div>
+        {% endif %}
+
+        <form id="dashboard-form" method="POST" class="mb-10">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div>
+                    <label for="year" class="block text-sm form-label">Year:</label>
+                    <select name="year" id="year" class="mt-1 p-2 form-select rounded w-full">
+                        {% for y in years %}
+                        <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="grand_prix" class="block text-sm form-label">Grand Prix:</label>
+                    <select name="grand_prix" id="grand_prix" class="mt-1 p-2 form-select rounded w-full">
+                        {% for gp in grand_prix_list %}
+                        <option value="{{ gp }}" {% if gp==grand_prix %}selected{% endif %}>{{ gp }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm form-label">Drivers (Comparison):</label>
+                    <div class="mt-1 max-h-40 overflow-y-auto bg-gray-800 p-2 rounded border border-gray-600">
+                        {% for driver in drivers %}
+                        <label class="block"><input type="checkbox" name="drivers" value="{{ driver }}"
+                                class="form-checkbox" {% if driver in drivers_selected %}checked{% endif %}> {{ driver
+                            }}</label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <label for="tire_driver" class="block text-sm form-label">Tire Strategy Driver:</label>
+                    <select name="tire_driver" id="tire_driver" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==tire_driver %}selected{% endif %}>{{ driver }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="heatmap_driver" class="block text-sm form-label">Heatmap Driver:</label>
+                    <select name="heatmap_driver" id="heatmap_driver" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==heatmap_driver %}selected{% endif %}>{{ driver }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="gear_driver" class="block text-sm form-label">Gear Shift Driver:</label>
+                    <select name="gear_driver" id="gear_driver" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==gear_driver %}selected{% endif %}>{{ driver }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="mt-4 p-2 form-button rounded w-full md:w-auto font-semibold">Update
+                Dashboard</button>
+        </form>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="plot-container">
+                <div class="collapsible-header flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">Speed & Throttle Comparison</h2>
+                    <select id="speed-metric" class="form-select p-1">
+                        <option value="Speed">Speed</option>
+                        <option value="RPM">RPM</option>
+                    </select>
+                </div>
+                <div class="collapsible-content active">
+                    <div id="speed-plot"></div>
+                    <div id="speed-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading speed plot...</p>
+                    </div>
+                    <p id="speed-plot-error" class="plot-error"></p>
+                </div>
+            </div>
+            <div class="plot-container">
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Sector Times (Top 5 Drivers)</h2>
+                </div>
+                <div class="collapsible-content active">
+                    <div id="sector-plot"></div>
+                    <div id="sector-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading sector plot...</p>
+                    </div>
+                    <p id="sector-plot-error" class="plot-error"></p>
+                </div>
+            </div>
+            <div class="plot-container">
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Tire Strategy</h2>
+                </div>
+                <div class="collapsible-content active">
+                    <div id="tire-plot"></div>
+                    <div id="tire-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading tire plot...</p>
+                    </div>
+                    <p id="tire-plot-error" class="plot-error"></p>
+                </div>
+            </div>
+            <div class="plot-container">
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Lap Time Distribution</h2>
+                </div>
+                <div class="collapsible-content active">
+                    <div id="lap-time-plot"></div>
+                    <div id="lap-time-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading lap time plot...</p>
+                    </div>
+                    <p id="lap-time-plot-error" class="plot-error"></p>
+                </div>
+            </div>
+            <div class="plot-container">
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Gear Shift Analysis</h2>
+                </div>
+                <div class="collapsible-content active">
+                    <div id="gear-plot"></div>
+                    <div id="gear-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading gear plot...</p>
+                    </div>
+                    <p id="gear-plot-error" class="plot-error"></p>
+                </div>
+            </div>
+            <div class="plot-container">
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Speed Heatmap</h2>
+                </div>
+                <div class="collapsible-content active">
+                    <div id="heatmap-plot"></div>
+                    <div id="heatmap-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading heatmap plot...</p>
+                    </div>
+                    <p id="heatmap-plot-error" class="plot-error"></p>
+                </div>
+            </div>
+            <div class="plot-container">
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Track Dominance Map</h2>
+                </div>
+                <div class="collapsible-content active">
+                    <div id="dominance-plot"></div>
+                    <div id="dominance-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading dominance plot...</p>
+                    </div>
+                    <p id="dominance-plot-error" class="plot-error"></p>
+                </div>
+            </div>
+            <div>
+                <div class="collapsible-header flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">Driver Statistics</h2>
+                    <a href="/api/export/driver_stats?year={{ year }}&grand_prix={{ grand_prix }}"
+                        class="form-button p-2 rounded text-sm">Export CSV</a>
+                </div>
+                <div class="collapsible-content active">
+                    <table class="bg-gray-800 rounded-lg shadow">
+                        <thead>
+                            <tr class="bg-gray-700">
+                                <th class="p-2">Number</th>
+                                <th class="p-2">Driver</th>
+                                <th class="p-2">Team</th>
+                                <th class="p-2">Position</th>
+                                <th class="p-2">Points</th>
+                                <th class="p-2">Fastest Lap (s)</th>
+                                <th class="p-2">Total Laps</th>
+                                <th class="p-2">Avg Speed (km/h)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in driver_stats %}
+                            <tr>
+                                <td class="p-2">{{ stat.DriverNumber }}</td>
+                                <td class="p-2">{{ stat.Abbreviation }}</td>
+                                <td class="p-2">{{ stat.TeamName }}</td>
+                                <td class="p-2">{{ stat.Position }}</td>
+                                <td class="p-2">{{ stat.Points }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.FastestLap if stat.FastestLap else '-' }}</td>
+                                <td class="p-2">{{ stat.TotalLaps }}</td>
+                                <td class="p-2">{{ "%.1f" % stat.AvgSpeed if stat.AvgSpeed else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div>
+                <div class="collapsible-header flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">Sector Time Statistics</h2>
+                    <a href="/api/export/sector_stats?year={{ year }}&grand_prix={{ grand_prix }}"
+                        class="form-button p-2 rounded text-sm">Export CSV</a>
+                </div>
+                <div class="collapsible-content active">
+                    <table class="bg-gray-800 rounded-lg shadow">
+                        <thead>
+                            <tr class="bg-gray-700">
+                                <th class="p-2">Driver</th>
+                                <th class="p-2">S1 Mean (s)</th>
+                                <th class="p-2">S1 Std (s)</th>
+                                <th class="p-2">S1 CV (%)</th>
+                                <th class="p-2">S1 Best (s)</th>
+                                <th class="p-2">S2 Mean (s)</th>
+                                <th class="p-2">S2 Std (s)</th>
+                                <th class="p-2">S2 CV (%)</th>
+                                <th class="p-2">S2 Best (s)</th>
+                                <th class="p-2">S3 Mean (s)</th>
+                                <th class="p-2">S3 Std (s)</th>
+                                <th class="p-2">S3 CV (%)</th>
+                                <th class="p-2">S3 Best (s)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in sector_stats %}
+                            <tr>
+                                <td class="p-2">{{ stat.Driver }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector1_Mean }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector1_Std if stat.Sector1_Std else '-' }}</td>
+                                <td class="p-2">{{ "%.1f" % (stat.Sector1_CV * 100) if stat.Sector1_CV else '-' }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector1_Best }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector2_Mean }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector2_Std if stat.Sector2_Std else '-' }}</td>
+                                <td class="p-2">{{ "%.1f" % (stat.Sector2_CV * 100) if stat.Sector2_CV else '-' }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector2_Best }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector3_Mean }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector3_Std if stat.Sector3_Std else '-' }}</td>
+                                <td class="p-2">{{ "%.1f" % (stat.Sector3_CV * 100) if stat.Sector3_CV else '-' }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.Sector3_Best }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-modal" class="modal">
+            <div class="modal-content">
+                <h2 class="text-xl font-bold mb-4">Error</h2>
+                <p id="error-message" class="mb-4"></p>
+                <button id="close-modal" class="form-button p-2 rounded w-full">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const emptyPlot = {
+            data: [],
+            layout: {
+                title: { text: "No Data Available", font: { size: 16, color: "#e2e8f0" } },
+                xaxis: { title: "No Data" },
+                yaxis: { title: "No Data" },
+                template: "plotly_dark",
+                annotations: [{ text: "No data available for this visualization", xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false, font: { size: 14, color: "#e2e8f0" } }],
+                margin: { t: 80, b: 60, l: 60, r: 60 }
+            }
+        };
+
+        async function fetchPlotData(plotType, params) {
+            try {
+                const response = await fetch(`/api/plot/${plotType}?${new URLSearchParams(params)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                const result = await response.json();
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                return JSON.parse(result.data);
+            } catch (e) {
+                console.error(`Error fetching ${plotType} plot:`, e);
+                return emptyPlot;
+            }
+        }
+
+        function showErrorModal(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-modal').style.display = 'block';
+        }
+
+        function renderF1Plot(plotId, loadingId, errorId, plotType, params) {
+            const plotDiv = document.getElementById(plotId);
+            const loadingDiv = document.getElementById(loadingId);
+            const errorDiv = document.getElementById(errorId);
+
+            loadingDiv.style.display = 'flex';
+            errorDiv.style.display = 'none';
+            plotDiv.style.display = 'none';
+
+            fetchPlotData(plotType, params).then(plot => {
+                try {
+                    if (!plot.data || plot.data.length === 0) {
+                        throw new Error('Empty or invalid plot data');
+                    }
+                    Plotly.newPlot(plotId, plot.data, plot.layout, { responsive: true, displayModeBar: true });
+                    loadingDiv.style.display = 'none';
+                    plotDiv.style.display = 'block';
+                } catch (e) {
+                    console.error(`Error rendering ${plotId}:`, e);
+                    loadingDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = `Failed to load ${plotType.replace('_', ' ')}: ${e.message}`;
+                    showErrorModal(`Failed to load ${plotType.replace('_', ' ')}: ${e.message}`);
+                    Plotly.newPlot(plotId, emptyPlot.data, emptyPlot.layout, { responsive: true });
+                }
+            });
+        }
+
+        function updatePlots() {
+            const form = document.getElementById('dashboard-form');
+            const formData = new FormData(form);
+            const drivers = formData.getAll('drivers');
+            const params = {
+                year: formData.get('year'),
+                grand_prix: formData.get('grand_prix'),
+                drivers: drivers,
+                tire_driver: formData.get('tire_driver'),
+                heatmap_driver: formData.get('heatmap_driver'),
+                gear_driver: formData.get('gear_driver'),
+                telemetry_metric: document.getElementById('speed-metric').value
+            };
+
+            renderF1Plot('speed-plot', 'speed-plot-loading', 'speed-plot-error', document.getElementById('speed-metric').value.toLowerCase(), params);
+            renderF1Plot('sector-plot', 'sector-plot-loading', 'sector-plot-error', 'sector', params);
+            renderF1Plot('tire-plot', 'tire-plot-loading', 'tire-plot-error', 'tire', params);
+            renderF1Plot('lap-time-plot', 'lap-time-plot-loading', 'lap-time-plot-error', 'lap_time', params);
+            renderF1Plot('gear-plot', 'gear-plot-loading', 'gear-plot-error', 'gear', params);
+            renderF1Plot('heatmap-plot', 'heatmap-plot-loading', 'heatmap-plot-error', 'heatmap', params);
+            renderF1Plot('dominance-plot', 'dominance-plot-loading', 'dominance-plot-error', 'dominance', params);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePlots();
+            document.getElementById('dashboard-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                updatePlots();
+            });
+            document.getElementById('speed-metric').addEventListener('change', updatePlots);
+            document.getElementById('close-modal').addEventListener('click', () => {
+                document.getElementById('error-modal').style.display = 'none';
+            });
+            document.querySelectorAll('.collapsible-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    content.classList.toggle('active');
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

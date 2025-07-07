@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telemetry Analysis - F1 Data Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .plot-container {
+            min-height: 400px;
+            position: relative;
+            background: #1a202c;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #4a5568;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #2d3748;
+            color: #e2e8f0;
+        }
+
+        .loading {
+            text-align: center;
+            color: #a0aec0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .plot-error {
+            display: none;
+            text-align: center;
+            color: #f87171;
+            padding: 12px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .spinner {
+            border: 4px solid #edf2f7;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .plotly-graph-div {
+            background: #1a202c !important;
+            border-radius: 8px;
+        }
+
+        .form-label {
+            color: #e2e8f0;
+            font-weight: 500;
+        }
+
+        .form-select {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+        }
+
+        .form-button {
+            background-color: #3b82f6;
+            transition: background-color 0.2s;
+        }
+
+        .form-button:hover {
+            background-color: #2563eb;
+        }
+
+        .nav-link {
+            color: #3b82f6;
+            transition: color 0.2s;
+        }
+
+        .nav-link:hover {
+            color: #2563eb;
+        }
+
+        .collapsible-header {
+            cursor: pointer;
+            background-color: #2d3748;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .collapsible-content {
+            display: none;
+        }
+
+        .collapsible-content.active {
+            display: block;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #1a202c;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-close {
+            cursor: pointer;
+            color: #f87171;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-8">
+        <nav class="mb-6">
+            <ul class="flex space-x-4 justify-center">
+                <li><a href="/" class="nav-link font-semibold">Dashboard</a></li>
+                <li><a href="/stats" class="nav-link font-semibold">Advanced Stats</a></li>
+                <li><a href="/telemetry" class="nav-link font-semibold">Telemetry Analysis</a></li>
+            </ul>
+        </nav>
+        <h1 class="text-4xl font-bold mb-8 text-center">Telemetry Analysis - {{ year }} {{ grand_prix }} Qualifying</h1>
+
+        {% if warning %}
+        <div class="bg-yellow-600 text-black p-4 rounded-lg mb-6 shadow">
+            {{ warning }}
+        </div>
+        {% endif %}
+
+        <form id="telemetry-form" method="POST" class="mb-10">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label for="year" class="block text-sm form-label">Year:</label>
+                    <select name="year" id="year" class="mt-1 p-2 form-select rounded w-full">
+                        {% for y in years %}
+                        <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="grand_prix" class="block text-sm form-label">Grand Prix:</label>
+                    <select name="grand_prix" id="grand_prix" class="mt-1 p-2 form-select rounded w-full">
+                        {% for gp in grand_prix_list %}
+                        <option value="{{ gp }}" {% if gp==grand_prix %}selected{% endif %}>{{ gp }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="telemetry_driver" class="block text-sm form-label">Telemetry Driver:</label>
+                    <select name="telemetry_driver" id="telemetry_driver" class="mt-1 p-2 form-select rounded w-full">
+                        {% for driver in drivers %}
+                        <option value="{{ driver }}" {% if driver==telemetry_driver %}selected{% endif %}>{{ driver }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="heatmap_metric" class="block text-sm form-label">Heatmap Metric:</label>
+                    <select name="heatmap_metric" id="heatmap_metric" class="mt-1 p-2 form-select rounded w-full">
+                        <option value="Speed">Speed</option>
+                        <option value="Throttle">Throttle</option>
+                        <option value="Brake">Brake</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="mt-4 p-2 form-button rounded w-full md:w-auto font-semibold">Update
+                Telemetry</button>
+            <button type="button" id="export-telemetry-stats"
+                class="mt-4 p-2 form-button rounded w-full md:w-auto font-semibold">Export Telemetry Stats
+                (CSV)</button>
+        </form>
+
+        <div class="space-y-8">
+            <div>
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Telemetry Heatmap</h2>
+                </div>
+                <div class="collapsible-content">
+                    <div class="plot-container">
+                        <div id="heatmap-plot"></div>
+                        <div id="heatmap-plot-loading" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading telemetry heatmap...</p>
+                        </div>
+                        <p id="heatmap-plot-error" class="plot-error"></p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Track Segment Dominance</h2>
+                </div>
+                <div class="collapsible-content">
+                    <div class="plot-container">
+                        <div id="track-segment-plot"></div>
+                        <div id="track-segment-plot-loading" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading track segment dominance...</p>
+                        </div>
+                        <p id="track-segment-plot-error" class="plot-error"></p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="collapsible-header">
+                    <h2 class="text-xl font-semibold">Telemetry Statistics</h2>
+                </div>
+                <div class="collapsible-content">
+                    <table class="bg-gray-800 rounded-lg shadow">
+                        <thead>
+                            <tr class="bg-gray-700">
+                                <th class="p-2">Driver</th>
+                                <th class="p-2">Throttle-to-Speed Ratio</th>
+                                <th class="p-2">Brake Frequency (%)</th>
+                                <th class="p-2">Max Speed (km/h)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in telemetry_stats %}
+                            <tr>
+                                <td class="p-2">{{ stat.Driver }}</td>
+                                <td class="p-2">{{ "%.3f" % stat.ThrottleToSpeedRatio if stat.ThrottleToSpeedRatio else
+                                    '-' }}</td>
+                                <td class="p-2">{{ "%.1f" % (stat.BrakeFrequency * 100) if stat.BrakeFrequency else '-'
+                                    }}</td>
+                                <td class="p-2">{{ "%.1f" % stat.MaxSpeed if stat.MaxSpeed else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-modal" class="modal">
+            <div class="modal-content">
+                <span class="modal-close float-right">&times;</span>
+                <p id="modal-error-message" class="text-red-400"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const emptyPlot = {
+            data: [],
+            layout: {
+                title: { text: "No Data Available", font: { size: 16, color: "#e2e8f0" } },
+                xaxis: { title: "No Data" },
+                yaxis: { title: "No Data" },
+                template: "plotly_dark",
+                annotations: [{ text: "No data available for this visualization", xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false, font: { size: 14, color: "#e2e8f0" } }],
+                margin: { t: 80, b: 60, l: 60, r: 60 }
+            }
+        };
+
+        async function fetchPlotData(plotType, params) {
+            try {
+                const response = await fetch(`/api/plot/${plotType}?${new URLSearchParams(params)}`);
+                if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+                return JSON.parse(result.data);
+            } catch (e) {
+                console.error(`Error fetching ${plotType} plot:`, e);
+                return emptyPlot;
+            }
+        }
+
+        function showErrorModal(message) {
+            const modal = document.getElementById('error-modal');
+            const errorMessage = document.getElementById('modal-error-message');
+            errorMessage.textContent = message;
+            modal.style.display = 'flex';
+        }
+
+        function renderF1Plot(plotId, loadingId, errorId, plotType, params) {
+            const plotDiv = document.getElementById(plotId);
+            const loadingDiv = document.getElementById(loadingId);
+            const errorDiv = document.getElementById(errorId);
+
+            loadingDiv.style.display = 'flex';
+            errorDiv.style.display = 'none';
+            plotDiv.style.display = 'none';
+
+            fetchPlotData(plotType, params).then(plot => {
+                try {
+                    if (!plot.data || plot.data.length === 0) throw new Error('Empty or invalid plot data');
+                    Plotly.newPlot(plotId, plot.data, plot.layout, { responsive: true, displayModeBar: true });
+                    loadingDiv.style.display = 'none';
+                    plotDiv.style.display = 'block';
+                } catch (e) {
+                    console.error(`Error rendering ${plotId}:`, e);
+                    loadingDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = `Failed to load ${plotType.replace('_', ' ')}: ${e.message}`;
+                    showErrorModal(`Failed to load ${plotType.replace('_', ' ')}: ${e.message}`);
+                    Plotly.newPlot(plotId, emptyPlot.data, emptyPlot.layout, { responsive: true });
+                }
+            });
+        }
+
+        function updatePlots() {
+            const form = document.getElementById('telemetry-form');
+            const formData = new FormData(form);
+            const params = {
+                year: formData.get('year'),
+                grand_prix: formData.get('grand_prix'),
+                telemetry_driver: formData.get('telemetry_driver'),
+                metric: formData.get('heatmap_metric')
+            };
+
+            renderF1Plot('heatmap-plot', 'heatmap-plot-loading', 'heatmap-plot-error', 'heatmap', params);
+            renderF1Plot('track-segment-plot', 'track-segment-plot-loading', 'track-segment-plot-error', 'track_segment', params);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePlots();
+            document.getElementById('telemetry-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                updatePlots();
+            });
+
+            document.getElementById('export-telemetry-stats').addEventListener('click', () => {
+                const formData = new FormData(document.getElementById('telemetry-form'));
+                const params = new URLSearchParams({
+                    year: formData.get('year'),
+                    grand_prix: formData.get('grand_prix')
+                });
+                window.location.href = `/api/export/telemetry_stats?${params}`;
+            });
+
+            document.querySelectorAll('.collapsible-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    content.classList.toggle('active');
+                });
+            });
+
+            document.querySelector('.modal-close').addEventListener('click', () => {
+                document.getElementById('error-modal').style.display = 'none';
+            });
+        });
+    </script>
+</body>
+
+</html>
